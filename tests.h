@@ -316,7 +316,7 @@ int test1_4(Test test)
         return 1;
     }
     verdict << "Тест 1.4 ";
-    test_passed = true;
+    bool test_passed = true;
 
     SRPEngine engine(test.models[0]);
     engine.setGridStep(0.05);
@@ -501,7 +501,7 @@ int test1_4(Test test)
 
         sun_dir[0] = sun_directions[direction][2];
         sun_dir[1] = sun_directions[direction][3];
-        dun_dir[2] = sun_directions[direction][4];
+        sun_dir[2] = sun_directions[direction][4];
 
         engine.dataset().setJointValue("SolarArrayGroup_L", gamma);
 
@@ -509,18 +509,18 @@ int test1_4(Test test)
 
         for (auto tr : faces)
         {
-            if (getScalar(sun_dir, std::array<double,3>{tr.normal_x, tr.normal_y, tr.normal_z}) > 0)
+            if (getScalar(sun_dir, std::array<double,3>{tr->normal_x, tr->normal_y, tr->normal_z}) > 0)
             {
                 count += 1.0;
-                avg_normal[0] += tr.normal_x;
-                avg_normal[1] += tr.normal_y;
-                avg_normal[2] += tr.normal_z;
+                avg_normal[0] += tr->normal_x;
+                avg_normal[1] += tr->normal_y;
+                avg_normal[2] += tr->normal_z;
             }
         }
 
         avg_normal[0] /= count; avg_normal[1] /= count; avg_normal[2] /= count;
 
-        if (!compare(getScalar(avg_normal, sun_dir), getNormal(std::array<double, 3>{0.0, sun_directions[direction][3], sun_directions[direction][4]}), 1e-6))
+        if (std::fabs((getScalar(avg_normal, sun_dir) - getModule(std::array<double, 3>{0.0, sun_directions[direction][3], sun_directions[direction][4]})) < 1e-6))
         {
             verdict << "НЕ ПРОЙДЕН: средняя нормаль смотрит не на Солнце\n";
             test_passed = false;
