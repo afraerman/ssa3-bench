@@ -29,6 +29,7 @@ struct Test
     std::vector<int> sun_directions;
     int calls;
     bool quick;
+    double grid;
 };
 
 int read_config_file(std::string filename, std::map<int, std::map<int, Test>>& config)
@@ -204,6 +205,12 @@ int read_config_file(std::string filename, std::map<int, std::map<int, Test>>& c
         if (key == "calls")
         {
             config[current_stage][current_test].calls = std::stoi(val);
+            continue;
+        }
+
+        if (key == "grid")
+        {
+            config[current_stage][current_test].grid = std::stod(val);
             continue;
         }
     }

@@ -29,6 +29,10 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 # ------------------------------------------------------------------
 # SRP library (FetchContent)
 # ------------------------------------------------------------------
+
+set(CMAKE_CUDA_ARCHITECTURES 80 CACHE STRING "CUDA archs" FORCE)
+set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
+
 include(FetchContent)
 
 # set(SM3D_ENABLE_CUDA ON CACHE BOOL "" FORCE)

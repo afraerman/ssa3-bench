@@ -523,3 +523,54 @@ int create_output_folder(std::string out_path, std::vector<std::string> specific
         return 1;
     }
 }
+
+pid_t start_gpu_logger(const std::string& log_path, int interval_ms = 100) {
+    
+    // Формируем команду
+    std::string cmd =
+        "nvidia-smi "
+        "--query-gpu=timestamp,index,pstate,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu "
+        "--format=csv "
+        "-lms " + std::to_string(interval_ms) + " "
+        "-f " + log_path;
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        // Дочерний процесс — запускаем nvidia-smi
+        execl("/bin/sh", "sh", "-c", cmd.c_str(), (char*)nullptr);
+        // Если execl не удался
+        std::cerr << "Failed to start nvidia-smi\n";
+        _exit(1);
+    }
+    else if (pid > 0) {
+        // Родительский процесс — возвращаем PID логгера
+        // Небольшая пауза, чтобы логгер успел стартовать
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        return pid;
+    }
+    else {
+        std::cerr << "fork() failed\n";
+        return -1;
+    }
+}
+
+void stop_gpu_logger(pid_t pid) {
+    if (pid <= 0) return;
+
+    // Мягко останавливаем (как Ctrl+C)
+    kill(pid, SIGINT);
+
+    // Ждём завершения
+    int status = 0;
+    for (int i = 0; i < 30; ++i) { // максимум ~3 секунды
+        pid_t result = waitpid(pid, &status, WNOHANG);
+        if (result == pid) {
+            return; // успешно завершился
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    // Если не остановился — убиваем принудительно
+    kill(pid, SIGKILL);
+    waitpid(pid, &status, 0);
+}

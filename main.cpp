@@ -11,6 +11,11 @@
 #include<fstream>
 #include<sstream>
 #include<ranges>
+#include<thread>
+#include <csignal>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <cstdlib>
 
 #include "SRPLibrary.h"
 #include "default_parameters.h"
@@ -26,6 +31,8 @@
 int show_tests();
 int run_all_tests();
 int run_test(int stage, int test);
+int debug_func();
+int main_menu(int argc, char** argv);
 
 std::map<int, std::map<int, Test>> config;
 
@@ -41,6 +48,7 @@ int main(int argc, char** argv)
     bool list  = false;
     bool quick = false;
     bool show  = false;
+    bool debug = false;
     std::string run;
     std::string config_file;
     std::string out_path;
@@ -48,6 +56,7 @@ int main(int argc, char** argv)
     app.add_flag("-l,--list", list, "Show tests with brief descriptions");
     app.add_flag("-q,--quick", quick, "For quick check");
     app.add_flag("-s,--show", show, "Visualize results");
+    app.add_flag("-d,--debug", debug, "Enter debugging function");
     app.add_option("-r,--run", run, "Specifies the run");
     app.add_option("-c,--config", config_file, "Config file path");
     app.add_option("-o,--out", out_path, "Specifies output folder");
@@ -59,6 +68,11 @@ int main(int argc, char** argv)
     
     int result;
 
+    if (debug)
+    {
+        result = debug_func();
+        return result;
+    }
  	if (list)
  	{
  		result = show_tests();
@@ -102,7 +116,8 @@ int main(int argc, char** argv)
  		return result;
  	}
 
- 	return 0;
+    result = main_menu(argc, argv);
+    return result;
 }
 
 int show_tests()
@@ -168,8 +183,22 @@ int run_test(int stage, int test)
             case 3:
                 test1_3(real_test);
                 break;
+            case 4:
+                test1_4(real_test);
+                break;
+            case 5:
+                test1_5(real_test);
+                break;
             default:
                 std::cout << "Unknown test " << t << " in stage " << stage << std::endl;
+            }
+            break;
+        case 2:
+            switch(t)
+            {
+            case 1:
+                test2_1(real_test);
+                break;
             }
             break;
         default:
@@ -178,4 +207,17 @@ int run_test(int stage, int test)
     }
 
 	return 0;
+}
+
+int debug_func()
+{
+    return 0;
+}
+
+int main_menu(int argc, char** argv)
+{
+    std::cout << "Input path: " << input_path << "\n";
+    std::cout << "Output folder: " << output_folder << '\n';
+    // enter choice
+    return 0;
 }

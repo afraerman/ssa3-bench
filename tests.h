@@ -2,7 +2,7 @@
 
 double getModule(std::array<double, 3> vec)
 {
-    return std::sqrt(vec[0]*vec[0] + vec[1]*vec[1] * vec[2]*vec[2]);
+    return std::sqrt(vec[0]*vec[0] + vec[1]*vec[1] + vec[2]*vec[2]);
 }
 
 double getScalar(std::array<double, 3> vec1, std::array<double, 3> vec2)
@@ -13,6 +13,13 @@ double getScalar(std::array<double, 3> vec1, std::array<double, 3> vec2)
 bool compare(std::array<double, 3> v1, std::array<double, 3> v2, double threshold)
 {
     return (std::fabs(getModule(v1) - getModule(v2)) / getModule(v2)) < threshold;
+}
+
+std::string get_model_name(std::string path)
+{
+    const size_t start = path.find_last_of('/') + 1;
+    const size_t end   = path.find_last_of('.');
+    return path.substr(start, end - start);
 }
 
 int test1_1(Test test)
@@ -211,7 +218,7 @@ int test1_1(Test test)
     }
 
     verdict.close();
-    return 0;
+    return !test_passed;
 }
 
 int test1_3(Test test)
@@ -319,7 +326,7 @@ int test1_4(Test test)
     bool test_passed = true;
 
     SRPEngine engine(test.models[0]);
-    engine.setGridStep(0.05);
+    engine.setGridStep(test.grid);
 
     SRPResult result_rtx, result_gpu, result_cpu;
     SRPResult result_pixel_rtx, result_pixel_gpu, result_pixel_cpu;
@@ -537,4 +544,160 @@ int test1_4(Test test)
 
     verdict.close();
     return !test_passed;
+}
+
+int test1_5(Test test)
+{
+    std::ofstream verdict(output_folder + "/verdict.txt");
+    if (!verdict.is_open())
+    {
+        std::cerr << "Can't create verdict " << output_folder + "/verdict\n";
+        return 1;
+    }
+    verdict << "Тест 1.4 ";
+    bool test_passed = true;
+
+    SRPEngine engine(test.models[0]);
+    engine.setGridStep(test.grid);
+    auto sun_direction = sun_directions[1];
+    engine.setSunDirection(sun_direction[0], sun_direction[1], sun_direction[2]);
+
+    SRPResult result, centroid_gpu, pixel_gpu;
+
+    centroid_gpu = engine.compute(SRPMethod::CentroidGPU);
+    pixel_gpu = engine.compute(SRPMethod::PixelGridGPU);
+
+    for (int i = 0; i < 999; i++)
+    {
+        result = engine.compute(SRPMethod::CentroidGPU);
+        if (!compare(centroid_gpu.total_force, result.total_force, test.tol_force))
+        {
+            verdict << "НЕ ПРОЙДЕН: расхождение модуля силы на " << i+1 << " итерации в методе CentroidGPU\n";
+            test_passed = false;
+            break;
+        }
+        if (!compare(centroid_gpu.total_moment, result.total_moment, test.tol_force))
+        {
+            verdict << "НЕ ПРОЙДЕН: расхождение модуля момента на " << i+1 << " итерации в методе CentroidGPU\n";
+            test_passed = false;
+            break;
+        }
+    }
+
+    for (int i = 0; i < 99; i++)
+    {
+        if (!test_passed) break;
+
+        result = engine.compute(SRPMethod::PixelGridGPU);
+        if (!compare(pixel_gpu.total_force, result.total_force, test.tol_force))
+        {
+            verdict << "НЕ ПРОЙДЕН: расхождение модуля силы на " << i+1 << " итерации в методе PixelGridGPU\n";
+            test_passed = false;
+            break;
+        }
+        if (!compare(pixel_gpu.total_moment, result.total_moment, test.tol_force))
+        {
+            verdict << "НЕ ПРОЙДЕН: расхождение модуля момента на " << i+1 << " итерации в методе PixelGridGPU\n";
+            test_passed = false;
+            break;
+        }
+    }
+
+    if (test_passed)
+    {
+        verdict << "ПРОЙДЕН по критериям: совпадение силы и момента по резульаттам 1000 вызовов CentroidGPU и PixelGridGPU\n";
+    }
+
+    verdict.close();
+    return !test_passed;
+}
+
+int test2_1(Test test)
+{
+    auto pid = start_gpu_logger(output_folder + "/gpu_log.csv");
+
+    std::ofstream verdict(output_folder + "/verdict.csv");
+    if (!verdict.is_open())
+    {
+        std::cerr << "Can't create verdict " << output_folder + "/verdict.csv\n";
+        return 1;
+    }
+    verdict << "Модель,число граней,T_констр,T_1,T_2,T_3,T_1_rtx,T_2_rtx,T_3_rtx\n";
+
+    double creation_time, rtx_time0, rtx_time1, rtx_time2, gpu_time0, gpu_time1, gpu_time2;
+
+    auto t0 = std::chrono::steady_clock::now();
+    auto t1 = std::chrono::steady_clock::now();
+
+    for (auto model: test.models)
+    {
+        auto t0 = std::chrono::steady_clock::now();
+        SRPEngine engine(model);
+        auto t1 = std::chrono::steady_clock::now();
+        creation_time = std::chrono::duration<double, std::micro>(t1 - t0).count();
+
+        engine.setMaxReflections(0);
+        engine.setSunDirection(sun_directions[0][2], sun_directions[0][3], sun_directions[0][4]);
+
+        if (is_rtx_device_available())
+        {
+            t0 = std::chrono::steady_clock::now();
+            engine.compute(SRPMethod::CentroidRTX);
+            t1 = std::chrono::steady_clock::now();
+            rtx_time0 = std::chrono::duration<double, std::micro>(t1 - t0).count();
+        }
+        
+        if (is_cuda_device_available())
+        {
+            t0 = std::chrono::steady_clock::now();
+            engine.compute(SRPMethod::CentroidGPU);
+            t1 = std::chrono::steady_clock::now();
+            gpu_time0 = std::chrono::duration<double, std::micro>(t1 - t0).count();
+        }
+
+        // second and third calls
+
+        if (is_cuda_device_available())
+        {
+            t0 = std::chrono::steady_clock::now();
+            engine.compute(SRPMethod::CentroidGPU);
+            t1 = std::chrono::steady_clock::now();
+            gpu_time1 = std::chrono::duration<double, std::micro>(t1 - t0).count();
+
+            t0 = std::chrono::steady_clock::now();
+            engine.compute(SRPMethod::CentroidGPU);
+            t1 = std::chrono::steady_clock::now();
+            gpu_time2 = std::chrono::duration<double, std::micro>(t1 - t0).count();
+            verdict << get_model_name(model) << "," << engine.dataset().triangleCount() << "," << gpu_time0 << "," << gpu_time1 << "," << gpu_time2 << ",";
+        }
+
+        if (is_rtx_device_available())
+        {
+            t0 = std::chrono::steady_clock::now();
+            engine.compute(SRPMethod::CentroidRTX);
+            t1 = std::chrono::steady_clock::now();
+            rtx_time1 = std::chrono::duration<double, std::micro>(t1 - t0).count();
+
+            t0 = std::chrono::steady_clock::now();
+            engine.compute(SRPMethod::CentroidRTX);
+            t1 = std::chrono::steady_clock::now();
+            rtx_time2 = std::chrono::duration<double, std::micro>(t1 - t0).count();
+            verdict << rtx_time0 << "," << rtx_time1 << "," << rtx_time2 << '\n';
+        }
+        else
+        {
+            verdict << "0,0\n";
+        }
+    }
+
+    verdict.close();
+    
+    stop_gpu_logger(pid);
+
+    return 0;
+}
+
+int test2_2(Test test)
+{
+    
 }
