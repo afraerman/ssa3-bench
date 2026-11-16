@@ -875,7 +875,7 @@ int test2_5(Test test)
         std::cerr << "Can't create verdict " << output_folder + "/verdict.csv\n";
         return 1;
     }
-    verdict << "Model,Pause,No,T_compute\n"; 
+    verdict << "Pause,No,T_compute\n"; 
 
     auto t0 = std::chrono::steady_clock::now();
     auto t1 = std::chrono::steady_clock::now();
@@ -901,7 +901,7 @@ int test2_5(Test test)
             
             for (int k = 0; k < test.calls; k++)
             {
-                verdict << model << "," << pause << "," << k + 1 << "," << delta[k] << '\n';
+                verdict << pause << "," << k + 1 << "," << delta[k] << '\n';
             }
         }
     }

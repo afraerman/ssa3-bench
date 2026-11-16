@@ -240,7 +240,7 @@ int read_config_file(std::string filename, std::map<int, std::map<int, Test>>& c
             while (std::getline(ss, token, ','))
             {
                 strip_in_place(token);
-                grids.push_back(std::stod(token));
+                pauses.push_back(std::stod(token));
             }
             config[current_stage][current_test].pauses = pauses;
             continue;
