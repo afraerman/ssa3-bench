@@ -12,10 +12,18 @@
 #include<sstream>
 #include<ranges>
 #include<thread>
-#include <csignal>
-#include <unistd.h>
-#include <sys/wait.h>
 #include <cstdlib>
+
+#ifdef _WIN32
+    #define WIN32_LEAN_AND_MEAN
+    #include <windows.h>
+#else
+    #include <unistd.h>
+    #include <sys/wait.h>
+    #include <csignal>
+    #include <cstring>
+#endif
+
 
 #include "SRPLibrary.h"
 #include "default_parameters.h"
@@ -199,6 +207,28 @@ int run_test(int stage, int test)
             case 1:
                 test2_1(real_test);
                 break;
+            case 2:
+                test2_2(real_test);
+                break;
+            case 3:
+                test2_3(real_test);
+                break;
+            case 4:
+                test2_4(real_test);
+                break;
+            case 5:
+                test2_5(real_test);
+            case 6:
+                test2_6(real_test);
+            default:
+                std::cout << "Unknown test " << t << " in stage " << stage << std::endl;
+            }
+            break;
+        case 3:
+            switch(t)
+            {
+            default:
+                std::cout << "Unknown test " << t << " in stage " << stage << std::endl;
             }
             break;
         default:

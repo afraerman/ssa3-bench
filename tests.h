@@ -22,6 +22,12 @@ std::string get_model_name(std::string path)
     return path.substr(start, end - start);
 }
 
+// активное ожидание процессора (t in microseconds)
+static void busy_wait_us(double t) {
+    auto a = std::chrono::steady_clock::now();
+    while (std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - a).count() < t) { }
+}
+
 int test1_1(Test test)
 {
 	SRPEngine engine(test.models[0]);
@@ -668,7 +674,7 @@ int test2_1(Test test)
             engine.compute(SRPMethod::CentroidGPU);
             t1 = std::chrono::steady_clock::now();
             gpu_time2 = std::chrono::duration<double, std::micro>(t1 - t0).count();
-            verdict << get_model_name(model) << "," << engine.dataset().triangleCount() << "," << gpu_time0 << "," << gpu_time1 << "," << gpu_time2 << ",";
+            verdict << get_model_name(model) << "," << engine.dataset().triangleCount() << "," << creation_time << "," << gpu_time0 << "," << gpu_time1 << "," << gpu_time2 << ",";
         }
 
         if (is_rtx_device_available())
@@ -686,7 +692,7 @@ int test2_1(Test test)
         }
         else
         {
-            verdict << "0,0\n";
+            verdict << "0,0,0\n";
         }
     }
 
@@ -699,5 +705,276 @@ int test2_1(Test test)
 
 int test2_2(Test test)
 {
+    auto pid = start_gpu_logger(output_folder + "/gpu_log.csv");
+    std::ofstream verdict(output_folder + "/verdict.csv");
+    if (!verdict.is_open())
+    {
+        std::cerr << "Can't create verdict " << output_folder + "/verdict.csv\n";
+        return 1;
+    }
+    verdict << "Model,Reflections,Direction_No,T_compute\n";
+
+    auto t0 = std::chrono::steady_clock::now();
+    auto t1 = std::chrono::steady_clock::now();
+    int number_of_calls = test.calls;
+    std::vector<double> delta(number_of_calls);
+
+    if (is_cuda_device_available())
+    {
+        for (auto model: test.models)
+        {
+            SRPEngine engine(model);
+            for (auto refl: test.reflections)
+            {
+                engine.setMaxReflections(refl);
+                for (int k = 0; k < number_of_calls; k++)
+                {
+                    engine.setSunDirection(sun_directions[k%20 + 1][2], sun_directions[k%20 + 1][3], sun_directions[k%20 + 1][4]);
+
+                    t0 = std::chrono::steady_clock::now();
+                    engine.compute(SRPMethod::CentroidGPU);
+                    engine.compute(SRPMethod::CentroidGPU);
+                    engine.compute(SRPMethod::CentroidGPU);
+                    t1 = std::chrono::steady_clock::now();
+                    delta[k] = std::chrono::duration<double, std::micro>(t1-t0).count() / 3.0;
+                }
+
+                for (int k = 0; k < number_of_calls; k++)
+                {
+                    verdict << model << "," << refl << "," << k % 20 + 1 << "," << delta[k] << '\n';
+                }
+            }
+        }   
+    }
+    else
+    {
+        verdict << "No,CUDA,devices,found\n";
+    }
+
+    verdict.close();
+    stop_gpu_logger(pid);
+
+    return 0;
+}
+
+int test2_3(Test test)
+{
+    auto pid = start_gpu_logger(output_folder + "/gpu_log.csv");
+
+    std::ofstream verdict(output_folder + "/verdict.csv");
+    if (!verdict.is_open())
+    {
+        std::cerr << "Can't create verdict " << output_folder + "/verdict.csv\n";
+        return 1;
+    }
+    verdict << "Model,Reflections,No,T_compute\n"; 
+
+    auto t0 = std::chrono::steady_clock::now();
+    auto t1 = std::chrono::steady_clock::now();
+    int number_of_calls = test.calls;
+    std::vector<double> delta(number_of_calls);
+
+    if (is_cuda_device_available())
+    {
+        for (auto model: test.models)
+        {
+            SRPEngine engine(model);
+            engine.setSunDirection(sun_directions[1][2], sun_directions[1][3], sun_directions[1][4]);
+            for (auto refl: test.reflections)
+            {
+                engine.setMaxReflections(refl);
+
+                for (int k = 0; k < test.calls; k++)
+                {
+                    t0 = std::chrono::steady_clock::now();
+                    engine.compute(SRPMethod::CentroidGPU);
+                    t1 = std::chrono::steady_clock::now();
+                    delta[k] = std::chrono::duration<double, std::micro>(t1 - t0).count();
+                }
+                
+                for (int k = 0; k < test.calls; k++)
+                {
+                    verdict << model << "," << refl << "," << k + 1 << "," << delta[k] << '\n';
+                }
+            }
+        }
+    }
+    else
+    {
+        verdict << "No,CUDA,available\n";
+    }
+
+    verdict.close();
     
+    stop_gpu_logger(pid);
+
+    return 0;
+}
+
+int test2_4(Test test)
+{
+    auto pid = start_gpu_logger(output_folder + "/gpu_log.csv");
+
+    std::ofstream verdict(output_folder + "/verdict.csv");
+    if (!verdict.is_open())
+    {
+        std::cerr << "Can't create verdict " << output_folder + "/verdict.csv\n";
+        return 1;
+    }
+    verdict << "Model,Reflections,No,T_compute\n"; 
+
+    auto t0 = std::chrono::steady_clock::now();
+    auto t1 = std::chrono::steady_clock::now();
+    int number_of_calls = test.calls;
+    std::vector<double> delta(number_of_calls);
+
+    if (is_cuda_device_available())
+    {
+        for (auto model: test.models)
+        {
+            SRPEngine engine(model);
+            engine.setSunDirection(sun_directions[1][2], sun_directions[1][3], sun_directions[1][4]);
+            for (auto refl: test.reflections)
+            {
+                engine.setMaxReflections(refl);
+
+                for (int k = 0; k < test.calls; k++)
+                {
+                    t0 = std::chrono::steady_clock::now();
+                    engine.compute(SRPMethod::CentroidGPU);
+                    t1 = std::chrono::steady_clock::now();
+                    delta[k] = std::chrono::duration<double, std::micro>(t1 - t0).count();
+                }
+                
+                for (int k = 0; k < test.calls; k++)
+                {
+                    verdict << model << "," << refl << "," << k + 1 << "," << delta[k] << '\n';
+                }
+            }
+        }
+    }
+    else
+    {
+        verdict << "No,CUDA,available\n";
+    }
+
+    verdict.close();
+    
+    stop_gpu_logger(pid);
+
+    return 0;
+}
+
+int test2_5(Test test)
+{
+    auto pid = start_gpu_logger(output_folder + "/gpu_log.csv");
+
+    std::ofstream verdict(output_folder + "/verdict.csv");
+    if (!verdict.is_open())
+    {
+        std::cerr << "Can't create verdict " << output_folder + "/verdict.csv\n";
+        return 1;
+    }
+    verdict << "Model,Pause,No,T_compute\n"; 
+
+    auto t0 = std::chrono::steady_clock::now();
+    auto t1 = std::chrono::steady_clock::now();
+    int number_of_calls = test.calls;
+    std::vector<double> delta(number_of_calls);
+
+    if (is_cuda_device_available())
+    {
+        SRPEngine engine(test.models[0]);
+        engine.setSunDirection(sun_directions[1][2], sun_directions[1][3], sun_directions[1][4]);
+        engine.setMaxReflections(test.reflections[0]);
+
+        for (auto pause: test.pauses)
+        {
+            for (int k = 0; k < test.calls; k++)
+            {
+                t0 = std::chrono::steady_clock::now();
+                engine.compute(SRPMethod::CentroidGPU);
+                t1 = std::chrono::steady_clock::now();
+                delta[k] = std::chrono::duration<double, std::micro>(t1 - t0).count();
+                busy_wait_us(pause * 1000.0);
+            }
+            
+            for (int k = 0; k < test.calls; k++)
+            {
+                verdict << model << "," << pause << "," << k + 1 << "," << delta[k] << '\n';
+            }
+        }
+    }
+    else
+    {
+        verdict << "No,CUDA,available\n";
+    }
+
+    verdict.close();
+    
+    stop_gpu_logger(pid);
+
+    return 0;
+}
+
+int test2_6(Test test)
+{
+    auto pid = start_gpu_logger(output_folder + "/gpu_log.csv");
+
+    std::ofstream verdict(output_folder + "/verdict.csv");
+    if (!verdict.is_open())
+    {
+        std::cerr << "Can't create verdict " << output_folder + "/verdict.csv\n";
+        return 1;
+    }
+    verdict << "Method,Grid,No,T_compute\n";
+
+    auto t0 = std::chrono::steady_clock::now();
+    auto t1 = std::chrono::steady_clock::now();
+    int number_of_calls = (int)test.grids.size() * 20;
+    std::vector<double> delta(number_of_calls);
+
+    SRPEngine engine(test.models[0]);
+    engine.setMaxReflections(test.reflections[0]);
+
+    int i = 0;
+    if (is_cuda_device_available())
+    {
+        for (auto grid: test.grids)
+        {
+            for (int k = 1; k <= 20; k++)
+            {
+                engine.setSunDirection(sun_directions[k][2], sun_directions[k][3], sun_directions[k][4]);
+                engine.setGridStep(grid);
+
+                t0 = std::chrono::steady_clock::now();
+                engine.compute(SRPMethod::PixelGridGPU);
+                t1 = std::chrono::steady_clock::now();
+                delta[20*i+k-1] = std::chrono::duration<double, std::micro>(t1 - t0).count();
+            }
+            i++;
+        }
+
+        i = 0;
+        for (auto grid: test.grids)
+        {
+
+            for (int k = 1; k <= 20; k++)
+            {
+                verdict << "PixelGridGPU," << grid << "," << k << "," << delta[20*i+k-1] << '\n';
+            }
+            i++;
+        }
+
+    }
+    else
+    {
+        verdict << "No,CUDA,available\n";
+    }
+
+    verdict.close();
+    
+    stop_gpu_logger(pid);
+
+    return 0;
 }

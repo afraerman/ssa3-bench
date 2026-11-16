@@ -30,6 +30,8 @@ struct Test
     int calls;
     bool quick;
     double grid;
+    std::vector<double> grids;
+    std::vector<double> pauses;
 };
 
 int read_config_file(std::string filename, std::map<int, std::map<int, Test>>& config)
@@ -211,6 +213,36 @@ int read_config_file(std::string filename, std::map<int, std::map<int, Test>>& c
         if (key == "grid")
         {
             config[current_stage][current_test].grid = std::stod(val);
+            continue;
+        }
+
+        if (key == "grids")
+        {
+            std::vector<double> grids;
+            std::stringstream ss(val);
+            std::string token;
+
+            while (std::getline(ss, token, ','))
+            {
+                strip_in_place(token);
+                grids.push_back(std::stod(token));
+            }
+            config[current_stage][current_test].grids = grids;
+            continue;
+        }
+
+        if (key == "pauses")
+        {
+            std::vector<double> pauses;
+            std::stringstream ss(val);
+            std::string token;
+
+            while (std::getline(ss, token, ','))
+            {
+                strip_in_place(token);
+                grids.push_back(std::stod(token));
+            }
+            config[current_stage][current_test].pauses = pauses;
             continue;
         }
     }

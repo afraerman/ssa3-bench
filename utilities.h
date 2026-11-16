@@ -2,6 +2,14 @@
 
 namespace fs = std::filesystem;
 
+#ifdef _WIN32
+    using ProcessHandle = HANDLE;
+    const ProcessHandle INVALID_PROCESS = nullptr;
+#else
+    using ProcessHandle = pid_t;
+    const ProcessHandle INVALID_PROCESS = -1;
+#endif
+
 std::string cleanName(std::string name) {
     std::replace(name.begin(), name.end(), ' ', '_');
     name.erase(std::remove_if(name.begin(), name.end(), [](char c) { return c == '\n' || c == '\r'; }), name.end());
@@ -524,53 +532,96 @@ int create_output_folder(std::string out_path, std::vector<std::string> specific
     }
 }
 
-pid_t start_gpu_logger(const std::string& log_path, int interval_ms = 100) {
-    
-    // Формируем команду
+ProcessHandle start_gpu_logger(const std::string& log_path, int interval_ms = 100)
+{
+
+#ifdef _WIN32
+    // ---------- Windows ----------
     std::string cmd =
         "nvidia-smi "
         "--query-gpu=timestamp,index,pstate,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu "
-        "--format=csv "
+        "--format=csv,nounits "
         "-lms " + std::to_string(interval_ms) + " "
-        "-f " + log_path;
+        "-f \"" + log_path + "\"";
 
+    STARTUPINFOA si{};
+    PROCESS_INFORMATION pi{};
+    si.cb = sizeof(si);
+
+    BOOL success = CreateProcessA(
+        nullptr,
+        cmd.data(),
+        nullptr, nullptr,
+        FALSE,
+        CREATE_NO_WINDOW,
+        nullptr, nullptr,
+        &si, &pi
+    );
+
+    if (!success) {
+        std::cerr << "CreateProcess failed, error: " << GetLastError() << std::endl;
+        return INVALID_PROCESS;
+    }
+
+    CloseHandle(pi.hThread);   // поток нам не нужен
+    Sleep(50);
+    return pi.hProcess;
+
+#else
+    // ---------- Linux ----------
+    // Запускаем nvidia-smi НАПРЯМУЮ, без оболочки
     pid_t pid = fork();
     if (pid == 0) {
-        // Дочерний процесс — запускаем nvidia-smi
-        execl("/bin/sh", "sh", "-c", cmd.c_str(), (char*)nullptr);
-        // Если execl не удался
-        std::cerr << "Failed to start nvidia-smi\n";
+        // Дочерний процесс
+        std::string interval_str = std::to_string(interval_ms);
+
+        execlp("nvidia-smi",
+               "nvidia-smi",
+               "--query-gpu=timestamp,index,pstate,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu",
+               "--format=csv,nounits",
+               "-lms", interval_str.c_str(),
+               "-f", log_path.c_str(),
+               (char*)nullptr);
+
+        // Если execlp не удался
+        std::cerr << "execlp(nvidia-smi) failed: " << strerror(errno) << std::endl;
         _exit(1);
     }
     else if (pid > 0) {
-        // Родительский процесс — возвращаем PID логгера
-        // Небольшая пауза, чтобы логгер успел стартовать
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         return pid;
     }
     else {
         std::cerr << "fork() failed\n";
-        return -1;
+        return INVALID_PROCESS;
     }
+#endif
 }
 
-void stop_gpu_logger(pid_t pid) {
-    if (pid <= 0) return;
+void stop_gpu_logger(ProcessHandle handle)
+{
+    if (handle == INVALID_PROCESS) return;
 
-    // Мягко останавливаем (как Ctrl+C)
-    kill(pid, SIGINT);
+#ifdef _WIN32
+    // ---------- Windows ----------
+    TerminateProcess(handle, 0);
+    WaitForSingleObject(handle, 3000);   // ждём до 3 секунд
+    CloseHandle(handle);
+#else
+    // ---------- Linux ----------
+    // Теперь handle — это PID самого nvidia-smi
+    kill(handle, SIGINT);   // мягко
 
-    // Ждём завершения
     int status = 0;
-    for (int i = 0; i < 30; ++i) { // максимум ~3 секунды
-        pid_t result = waitpid(pid, &status, WNOHANG);
-        if (result == pid) {
+    for (int i = 0; i < 30; ++i) {   // ~3 секунды
+        if (waitpid(handle, &status, WNOHANG) == handle) {
             return; // успешно завершился
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    // Если не остановился — убиваем принудительно
-    kill(pid, SIGKILL);
-    waitpid(pid, &status, 0);
+    // Если не остановился — убиваем
+    kill(handle, SIGKILL);
+    waitpid(handle, &status, 0);
+#endif
 }
